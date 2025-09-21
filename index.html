@@ -117,6 +117,88 @@
             margin-bottom: 15px;
         }
 
+        .ending-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: rgba(10, 30, 10, 0.95);
+            color: #d7f075;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid #d7f075;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+            width: 90%;
+            max-width: 240px;
+            display: none;
+            opacity: 0;
+            z-index: 11;
+        }
+
+        .ending-screen.show {
+            animation: endingAppear 0.6s ease forwards;
+        }
+
+        .ending-screen h2 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .ending-message {
+            font-size: 11px;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+
+        .ending-stats {
+            font-size: 11px;
+            margin: 10px 0;
+        }
+
+        .ending-stats p {
+            margin: 4px 0;
+        }
+
+        .ending-story {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0 15px;
+            text-align: left;
+        }
+
+        .ending-story .ending-line {
+            font-size: 10px;
+            color: #e8f7b5;
+            margin: 4px 0;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .ending-story .ending-line.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .ending-highlight {
+            color: #ffffff;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.6);
+        }
+
+        @keyframes endingAppear {
+            0% {
+                transform: translate(-50%, -50%) scale(0.85);
+                opacity: 0;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+
         .game-btn {
             background: #9bbc0f;
             color: #1e1e1e;
@@ -377,6 +459,16 @@
                                 <button class="game-btn" id="restartBtn">リスタート</button>
                             </div>
                         </div>
+                        <div class="ending-screen" id="endingScreen" style="display: none;">
+                            <h2>エンディング</h2>
+                            <p class="ending-message" id="endingMessage">迷宮を踏破し、静寂が戻った…</p>
+                            <ul class="ending-story" id="endingStory"></ul>
+                            <div class="ending-stats">
+                                <p>総スコア: <span class="ending-highlight" id="endingScore">0</span></p>
+                                <p>クリアタイム: <span class="ending-highlight" id="endingTime">0</span>秒</p>
+                            </div>
+                            <button class="game-btn" id="endingRestartBtn">もう一度冒険する</button>
+                        </div>
                     </div>
                 </div>
                 <div class="controls">
@@ -396,9 +488,10 @@
                 <h3>拡張版あそびかた</h3>
                 <p>・緑■がプレイヤー、赤■がゴール</p>
                 <p>・青●はコイン（10点）、黄●はスピードアップ</p>
-                <p>・紫●は爆弾アイテム（準備中）、ピンク●はライフ回復</p>
+                <p>・紫●は爆弾アイテム、ピンク●はライフ回復</p>
                 <p>・赤●の敵に触ると1ライフ減る</p>
-                <p>・Aボタン：ダッシュ、Bボタン：準備中</p>
+                <p>・Aボタン：ダッシュ、Bボタン：爆弾</p>
+                <p>・全6ステージを攻略してエンディングを目指そう</p>
             </div>
         </div>
     </div>
@@ -442,6 +535,11 @@
                 playSound(200, 0.3);
                 setTimeout(() => playSound(150, 0.3), 300);
                 setTimeout(() => playSound(100, 0.5), 600);
+            },
+            ending: () => {
+                playSound(320, 0.3);
+                setTimeout(() => playSound(420, 0.3), 250);
+                setTimeout(() => playSound(540, 0.4), 500);
             }
         };
 
@@ -458,6 +556,12 @@
         const finalTimeElement = document.getElementById('finalTime');
         const nextBtn = document.getElementById('nextBtn');
         const restartBtn = document.getElementById('restartBtn');
+        const endingScreen = document.getElementById('endingScreen');
+        const endingMessageElement = document.getElementById('endingMessage');
+        const endingStoryElement = document.getElementById('endingStory');
+        const endingScoreElement = document.getElementById('endingScore');
+        const endingTimeElement = document.getElementById('endingTime');
+        const endingRestartBtn = document.getElementById('endingRestartBtn');
 
         // ゲーム変数
         let gameRunning = true;
@@ -489,11 +593,23 @@
             color: '#8b0000'
         };
 
+        const goalPositions = [
+            { x: 8, y: 7 },
+            { x: 8, y: 7 },
+            { x: 8, y: 7 },
+            { x: 8, y: 7 },
+            { x: 8, y: 7 },
+            { x: 8, y: 7 }
+        ];
+
         // 敵配列
         let enemies = [];
 
         // アイテム配列
         let items = [];
+
+        // エンディング演出管理
+        let endingTimeouts = [];
 
         // アイテムタイプ
         const ITEM_TYPES = {
@@ -540,6 +656,42 @@
                 [1,1,1,1,1,1,0,1,0,1],
                 [1,0,0,0,0,0,0,0,0,1],
                 [1,1,1,1,1,1,1,1,1,1]
+            ],
+            // レベル4
+            [
+                [1,1,1,1,1,1,1,1,1,1],
+                [1,0,0,1,0,0,0,0,0,1],
+                [1,0,1,1,0,1,1,1,0,1],
+                [1,0,1,0,0,0,0,1,0,1],
+                [1,0,1,0,1,1,0,1,0,1],
+                [1,0,0,0,0,0,0,1,0,1],
+                [1,1,1,1,1,0,1,1,0,1],
+                [1,0,0,0,1,0,0,0,0,1],
+                [1,1,1,1,1,1,1,1,1,1]
+            ],
+            // レベル5
+            [
+                [1,1,1,1,1,1,1,1,1,1],
+                [1,0,0,0,0,0,0,1,0,1],
+                [1,0,1,1,1,1,0,1,0,1],
+                [1,0,0,0,0,1,0,0,0,1],
+                [1,1,1,1,0,1,1,1,0,1],
+                [1,0,0,1,0,0,0,1,0,1],
+                [1,0,1,0,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,1],
+                [1,1,1,1,1,1,1,1,1,1]
+            ],
+            // レベル6
+            [
+                [1,1,1,1,1,1,1,1,1,1],
+                [1,0,0,0,1,0,0,0,0,1],
+                [1,0,1,0,1,0,1,1,0,1],
+                [1,0,1,0,0,0,1,0,0,1],
+                [1,0,0,0,1,0,0,0,1,1],
+                [1,1,1,0,1,1,1,0,0,1],
+                [1,0,0,0,0,0,1,0,1,1],
+                [1,0,1,1,1,0,0,0,0,1],
+                [1,1,1,1,1,1,1,1,1,1]
             ]
         ];
 
@@ -555,24 +707,33 @@
         function initGame() {
             gameRunning = true;
             gameOverElement.style.display = 'none';
-            
+            endingScreen.style.display = 'none';
+            endingScreen.classList.remove('show');
+            endingTimeouts.forEach(timeout => clearTimeout(timeout));
+            endingTimeouts = [];
+            endingStoryElement.innerHTML = '';
+
             // プレイヤー状態リセット
             player.x = 1;
             player.y = 1;
             player.lastMove = 0;
             playerSpeed = 1;
             invulnerable = false;
-            
+
             // ライフ管理
             if (currentLevel === 1) {
                 lives = 3;
                 score = 0;
                 bombs = 1; // 初期爆弾1個
             }
-            
+
             // 迷路設定
             currentMaze = mazePatterns[currentLevel - 1] || mazePatterns[mazePatterns.length - 1];
-            
+
+            const goalPosition = goalPositions[currentLevel - 1] || goalPositions[goalPositions.length - 1];
+            goal.x = goalPosition.x;
+            goal.y = goalPosition.y;
+
             // 敵とアイテム生成
             generateEnemies();
             generateItems();
@@ -1035,38 +1196,40 @@
         function levelComplete() {
             gameRunning = false;
             clearInterval(timerInterval);
-            
+
             const timeBonus = Math.max(0, 60 - gameTimer) * 5;
             score += timeBonus;
-            
+
             sounds.levelComplete();
-            
+
             finalTimeElement.textContent = gameTimer;
-            
+
             if (currentLevel < mazePatterns.length) {
                 gameOverTitle.textContent = 'レベルクリア！';
                 gameOverText.innerHTML = `スコア: ${score}<br>時間: ${gameTimer}秒<br>ボーナス: +${timeBonus}`;
                 nextBtn.style.display = 'inline-block';
+                gameOverElement.style.display = 'block';
             } else {
-                gameOverTitle.textContent = '全レベルクリア！';
-                gameOverText.innerHTML = `最終スコア: ${score}<br>おめでとう！`;
-                nextBtn.style.display = 'none';
+                showEnding();
             }
-            
-            gameOverElement.style.display = 'block';
         }
 
         // ゲームオーバー
         function gameOver() {
             gameRunning = false;
             clearInterval(timerInterval);
-            
+
             sounds.gameOver();
-            
+
             gameOverTitle.textContent = 'ゲームオーバー';
             gameOverText.innerHTML = `最終スコア: ${score}<br>レベル${currentLevel}で終了`;
             nextBtn.style.display = 'none';
             gameOverElement.style.display = 'block';
+            endingTimeouts.forEach(timeout => clearTimeout(timeout));
+            endingTimeouts = [];
+            endingStoryElement.innerHTML = '';
+            endingScreen.classList.remove('show');
+            endingScreen.style.display = 'none';
         }
 
         // 次のレベル
@@ -1083,6 +1246,44 @@
             score = 0;
             lives = 3;
             initGame();
+        }
+
+        function showEnding() {
+            gameOverElement.style.display = 'none';
+            endingTimeouts.forEach(timeout => clearTimeout(timeout));
+            endingTimeouts = [];
+            endingScreen.style.display = 'block';
+            endingScreen.classList.remove('show');
+            void endingScreen.offsetWidth;
+            endingScreen.classList.add('show');
+            nextBtn.style.display = 'none';
+
+            endingScoreElement.textContent = score;
+            endingTimeElement.textContent = gameTimer;
+
+            const storyLines = [
+                '森を覆っていた霧が晴れ、陽の光が差し込む。',
+                '迷宮に迷った人々の記憶が、静かに戻り始めた。',
+                '勇者の足跡だけが、柔らかな苔に刻まれている。'
+            ];
+
+            endingStoryElement.innerHTML = '';
+
+            storyLines.forEach((line, index) => {
+                const timeout = setTimeout(() => {
+                    const li = document.createElement('li');
+                    li.textContent = line;
+                    li.classList.add('ending-line');
+                    endingStoryElement.appendChild(li);
+                    requestAnimationFrame(() => li.classList.add('show'));
+                }, index * 800);
+                endingTimeouts.push(timeout);
+            });
+
+            endingMessageElement.textContent = '迷宮の守護者は眠りにつき、新たな朝が訪れた。';
+
+            const soundTimeout = setTimeout(() => sounds.ending && sounds.ending(), 600);
+            endingTimeouts.push(soundTimeout);
         }
 
         // ゲームループ
@@ -1253,6 +1454,18 @@
         restartBtn.addEventListener('click', (e) => {
             e.preventDefault();
             vibrateButton(restartBtn);
+            resetGame();
+        });
+
+        endingRestartBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            vibrateButton(endingRestartBtn);
+            resetGame();
+        });
+
+        endingRestartBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            vibrateButton(endingRestartBtn);
             resetGame();
         });
 
